@@ -1,6 +1,6 @@
-var REGS = require('./regs.js');
+const REGS = require('./regs.js');
 
-var utils = {
+const utils = {
 	regExample: function(sensor) {
 		if(sensor == 'a'){
 			console.log("Error: wrong register supplied to setSensConf(sensor,reg,hexVAL). Use one from the list instead:");
@@ -32,7 +32,10 @@ var utils = {
 
 	dataConvertion: function(object,sensor,axisList,uM){
 		var uM = (uM !== undefined) ? uM : false;
-		//console.log(uM);
+		var currScale;
+		if(sensor == 'a'){
+			currScale = object.readByteSync(REGS.COMPLETE_REGS_DICT.I2C_AM_ADDRESS,REGS.COMPLETE_REGS_DICT.A_XYZ_DATA_CFG);
+		}
 
 	},
 
