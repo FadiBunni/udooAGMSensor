@@ -1,9 +1,6 @@
 const utils = require('./utils.js');
 const fs = require('fs');
 
-var u = utils.dataConvertion(1);
-var c= 0
-
 //setInterval(readMotionSensors, 150);
 
 // var zero = {
