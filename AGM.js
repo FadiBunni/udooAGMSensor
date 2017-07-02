@@ -1,7 +1,9 @@
 const REGS = require('./regs.js');
+const util = require('./utils.js');
 const i2c  = require('i2c-bus');
 const exec = require('child_process').exec;
 const time = require('system-sleep');
+const isHex = require('is-hex');
 
 
 function AGM(gScaleRange,fsDouble,aScaleRange,noise){
@@ -150,29 +152,268 @@ function AGM(gScaleRange,fsDouble,aScaleRange,noise){
 
 	//Sensor calibrate
 	this.calibrateSens = function(samples){
+		var i = 0;
+		var perc = -1;
+		var acc_angle = [];
+		var rate_gyr = [];
 
+		var sumX = 0;
+		var sumY = 0;
+		var sumZ = 0;
+
+		var gsumX = 0;
+		var gsumY = 0;
+		var gsumZ = 0;
+
+		var tarXvect = [];
+		var tarYvect = [];
+		var tarZvect = [];
+
+		var gtarXvect = [];
+		var gtarYvect = [];
+		var gtarZvect = [];
+
+		var gyrXangle = 0.0;
+		var gyrYangle = 0.0;
+		var gyrZangle = 0.0;
+
+		var accXangle = 0.0;
+		var accYangle = 0.0;
+		var accZangle = 0.0;
+
+		var avgX = sumX / samples;
+		var avgY = sumY / samples;
+		var avgZ = sumZ / samples;
+
+		var gavgX = gsumX / samples;
+		var gavgY = gsumY / samples;
+		var gavgZ = gsumZ / samples;
+
+		var axisOffset = [];
+
+		// This needs to be fixed so that it can be used in javascript....
+		console.log("CAUTION! Sensors calibration.Set your udoo-neo in an horizontal position");
+
+		while(i < samples){
+			acc_angle = this.readAData();
+			rate_gyr = this.readGData();
+
+			factor = accScale / 2;
+
+			if(acc_angle[0] >= 32768){
+				tarXvect.push(acc_angle[0]-65536);
+			}else{
+				tarXvect.push(acc_angle[0]);
+			}
+
+			if(acc_angle[1] >= 32768){
+				tarYvect.push(acc_angle[1]-65536);
+			}else {
+				tarYvect.push(acc_angle[1]);
+			}
+
+			if(acc_angle[2] >= 32768){
+				tarZvect.push(acc_angle[2] - 65536 + 16384/factor);
+			}else{
+				tarZvect.push(acc_angle[2] + 16384/factor);
+			}
+
+			if(rate_gyr[0] >= 32768){
+				gtarXvect.push(rate_gyr[0]-65536);
+			}else{
+				gtarXvect.push(rate_gyr[0]);
+			}
+
+			if(rate_gyr[1] >= 32768){
+				gtarYvect.push(rate_gyr[1]-65536);
+			}else{
+				gtarYvect.push(rate_gyr[1]);
+			}
+
+			if(rate_gyr[2] >= 32768){
+				gtarZvect.push(rate_gyr[2]-65536);
+			}else{
+				gtarZvect.push(rate_gyr[2]);
+			}
+
+			sumX += tarXvect[i];
+			sumY += tarYvect[i];
+			sumZ += tarZvect[i];
+
+			gsumX += gtarXvect[i];
+			gsumY += gtarYvect[i];
+			gsumZ += gtarZvect[i];
+
+			var loading = i*100/samples;
+			if(loading != perc){
+				console.log("Calibration percentage: " + loading + "%");
+				perc = loading;
+			}
+			i++;
+		}
+
+		console.log("Calibration percentage: 100%");
+
+		axisOffset.push(avgX);
+		axisOffset.push(avgY);
+		axisOffset.push(avgZ);
+		axisOffset.push(gavgX);
+		axisOffset.push(gavgY);
+		axisOffset.push(gavgZ);
+
+		calibrated = true;
+		return axisOffset;
 	};
 
+	// set sensors configurations
 	this.setSensConf = function(sensor,reg,hexVal){
+		this.toStandby(sensor);
 
+		if(sensor == 'a'){
+			if(REGS.A_CREGS_LIST.indexOf(reg) != -1){
+				i2c1.writeByteSync(REGS.COMPLETE_REGS_DICT.I2C_AM_ADDRESS,REGS.COMPLETE_REGS_DICT.reg,hexVal);
+			}else{
+				util.regExample('a');
+			}
+		}
+
+		if(sensor == 'm'){
+			if(REGS.M_CREGS_LIST.indexOf(reg) != -1){
+				if(isHex(hexVal)){
+					i2c1.writeByteSync(REGS.COMPLETE_REGS_DICT.I2C_AM_ADDRESS,REGS.COMPLETE_REGS_DICT.reg,hexVal);
+				}
+			}else{
+				util.regExample('m');
+			}
+		}
+
+		if(sensor == 'g'){
+			if(REGS.G_CREGS_LIST.indexOf(reg) != -1){
+				i2c1.writeByteSync(REGS.COMPLETE_REGS_DICT.I2C_AM_ADDRESS,REGS.COMPLETE_REGS_DICT.reg,hexVal);
+			}else{
+				util.regExample('g');
+			}
+		}
+
+		time.sleep(300);
+		this.toActive(sensor);
 	};
 
+	// read accelerometer data
 	this.readAData = function(uM){
+		var uM = (uM !== undefined) ? uM : null;
+		var axisList = [];
 
+		// getting x,y,z coordinate shifting first 8bit and adding
+		// (with the or operator) the others 8 bit to the address
+		var xMsbRaw = i2c1.readByteSync(REGS.COMPLETE_REGS_DICT.I2C_AM_ADDRESS,REGS.COMPLETE_REGS_DICT.A_OUT_X_MSB);
+		var xLsbRaw = i2c1.readByteSync(REGS.COMPLETE_REGS_DICT.I2C_AM_ADDRESS,REGS.COMPLETE_REGS_DICT.A_OUT_X_LSB);
+
+		var xRaw = (xMsbRaw << 8 | xLsbRaw); // x axis
+
+		var yMsbRaw = i2c1.readByteSync(REGS.COMPLETE_REGS_DICT.I2C_AM_ADDRESS,REGS.COMPLETE_REGS_DICT.A_OUT_Y_MSB);
+		var yLsbRaw = i2c1.readByteSync(REGS.COMPLETE_REGS_DICT.I2C_AM_ADDRESS,REGS.COMPLETE_REGS_DICT.A_OUT_Y_LSB);
+
+		var yRaw = (yMsbRaw << 8 | yLsbRaw) // y axis
+
+		var zMsbRaw = i2c1.readByteSync(REGS.COMPLETE_REGS_DICT.I2C_AM_ADDRESS,REGS.COMPLETE_REGS_DICT.A_OUT_Z_MSB);
+		var zLsbRaw = i2c1.readByteSync(REGS.COMPLETE_REGS_DICT.I2C_AM_ADDRESS,REGS.COMPLETE_REGS_DICT.A_OUT_Z_LSB);
+
+		var zRaw = (zMsbRaw << 8 | zLsbRaw) // z axis
+
+		axisList.push(xRaw);
+		axisList.push(yRaw);
+		axisList.push(zRaw);
+
+		axisList = utils.dataConvertion(i2c1,"a",axisList,uM);
+
+		return axisList;
 	};
 
 	this.readMData = function(uM){
+		var uM = (uM !== undefined) ? uM : null;
+		var axisList = [];
 
+		// getting x,y,z coordinate shifting first 8bit and adding
+		// (with the or operator) the others 8 bit to the address
+		var xMsbRaw = i2c1.readByteSync(REGS.COMPLETE_REGS_DICT.I2C_AM_ADDRESS,REGS.COMPLETE_REGS_DICT.M_OUT_X_MSB);
+		var xLsbRaw = i2c1.readByteSync(REGS.COMPLETE_REGS_DICT.I2C_AM_ADDRESS,REGS.COMPLETE_REGS_DICT.M_OUT_X_LSB);
+
+		var xRaw = (xMsbRaw << 8 | xLsbRaw); // x axis
+
+		var yMsbRaw = i2c1.readByteSync(REGS.COMPLETE_REGS_DICT.I2C_AM_ADDRESS,REGS.COMPLETE_REGS_DICT.M_OUT_Y_MSB);
+		var yLsbRaw = i2c1.readByteSync(REGS.COMPLETE_REGS_DICT.I2C_AM_ADDRESS,REGS.COMPLETE_REGS_DICT.M_OUT_Y_LSB);
+
+		var yRaw = (yMsbRaw << 8 | yLsbRaw) // y axis
+
+		var zMsbRaw = i2c1.readByteSync(REGS.COMPLETE_REGS_DICT.I2C_AM_ADDRESS,REGS.COMPLETE_REGS_DICT.M_OUT_Z_MSB);
+		var zLsbRaw = i2c1.readByteSync(REGS.COMPLETE_REGS_DICT.I2C_AM_ADDRESS,REGS.COMPLETE_REGS_DICT.M_OUT_Z_LSB);
+
+		var zRaw = (zMsbRaw << 8 | zLsbRaw) // z axis
+
+		axisList.push(xRaw);
+		axisList.push(yRaw);
+		axisList.push(zRaw);
+
+		axisList = utils.dataConvertion(i2c1,"m",axisList,uM);
+
+		return axisList;
 	};
 
 	this.readGData = function(uM){
+		var uM = (uM !== undefined) ? uM : null;
+		var axisList = [];
+G
+		// getting x,y,z coordinate shifting first 8bit and adding
+		// (with the or operator) the others 8 bit to the address
+		var xMsbRaw = i2c1.readByteSync(REGS.COMPLETE_REGS_DICT.I2C_G_ADDRESS,REGS.COMPLETE_REGS_DICT.G_OUT_X_MSB);
+		var xLsbRaw = i2c1.readByteSync(REGS.COMPLETE_REGS_DICT.I2C_G_ADDRESS,REGS.COMPLETE_REGS_DICT.G_OUT_X_LSB);
 
+		var xRaw = (xMsbRaw << 8 | xLsbRaw); // x axis
+
+		var yMsbRaw = i2c1.readByteSync(REGS.COMPLETE_REGS_DICT.I2C_G_ADDRESS,REGS.COMPLETE_REGS_DICT.G_OUT_Y_MSB);
+		var yLsbRaw = i2c1.readByteSync(REGS.COMPLETE_REGS_DICT.I2C_G_ADDRESS,REGS.COMPLETE_REGS_DICT.G_OUT_Y_LSB);
+
+		var yRaw = (yMsbRaw << 8 | yLsbRaw) // y axis
+
+		var zMsbRaw = i2c1.readByteSync(REGS.COMPLETE_REGS_DICT.I2C_G_ADDRESS,REGS.COMPLETE_REGS_DICT.G_OUT_Z_MSB);
+		var zLsbRaw = i2c1.readByteSync(REGS.COMPLETE_REGS_DICT.I2C_G_ADDRESS,REGS.COMPLETE_REGS_DICT.G_OUT_Z_LSB);
+
+		var zRaw = (zMsbRaw << 8 | zLsbRaw) // z axis
+
+		axisList.push(xRaw);
+		axisList.push(yRaw);
+		axisList.push(zRaw);
+
+		axisList = utils.dataConvertion(i2c1,"g",axisList,uM);
+
+		return axisList;
 	};
 
 	this.readTData = function(uM){
+		var uM = (uM !== undefined) ? uM : null;
+		var tempCels;
+		var tempRaw= i2c1.readByteSync(REGS.COMPLETE_REGS_DICT.I2C_AM_ADDRESS,REGS.COMPLETE_REGS_DICT.A_TEMP);
 
+		if tempRaw >= 128{
+			tempCels = (tempRaw-256)*0.96;
+		}else{
+			tempCels = tempRaw*0.96;
+		}
+
+		if(uM == null || uM == 'raw')
+			return tempRaw;
+		if(uM == 'C')
+			return tempCels;
+		if(uM == 'K')
+			var tempKelv= tempCels + 273.15;
+			return tempKelv;
+		if(uM == 'F')
+			var tempFahr = (tempCels * 1.8)+32;
+			return tempFahr;
 	};
 
+	// complementary filter algorithm
 	this.comFilter = function(DT,axisOffset){
 
 	};
@@ -188,9 +429,6 @@ function AGM(gScaleRange,fsDouble,aScaleRange,noise){
 	this.getCurrentConf = function(sensor,screen){
 
 	};
-
-
-
 }
 
 module.exports = AGM;

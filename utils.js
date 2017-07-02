@@ -32,7 +32,7 @@ const utils = {
 	},
  	//get correct value scale
 	dataConvertion: function(object,sensor,axisList,uM){
-		var uM = (uM !== undefined) ? uM : false;
+		var uM = (uM !== undefined) ? uM : null;
 		var currScale;
 		var x,y,z;
 		if(sensor == 'a'){
@@ -63,7 +63,7 @@ const utils = {
 			z = ((axisList[2] / 4) * 0.244 * factor);
 
 			//raw values
-			if(uM == false || uM == 'raw'){
+			if(uM == null || uM == 'raw'){
 				return axisList;
 			//g components
 			}else if(uM == 'gcomp'){
@@ -108,7 +108,7 @@ const utils = {
 			if(axisList[2] >= 32768)
 				axisList[2] -= 65536;
 
-			if(uM == false || uM == 'raw'){
+			if(uM == null || uM == 'raw'){
 				return axisList;
 			}else if(uM == 'ut'){
 				axisList[0] = ((axisList[0]) * sensitivity);
@@ -134,7 +134,7 @@ const utils = {
 			if(axisList[2] >= 32769)
 				axisList[2] = axisList[2] - 65535;
 
-			if(uM == false || uM == 'raw'){
+			if(uM == null || uM == 'raw'){
 				return axisList;
 			//deg or degs?????
 			}else if(uM == 'deg' || uM == 'rad'){
@@ -151,7 +151,7 @@ const utils = {
 				axisList[0] = -(axisList[0] * sensitivity);
 				axisList[1] = -(axisList[1] * sensitivity);
 				axisList[2] = -(axisList[2] * sensitivity);
-				
+
 				if(uM == 'rad'){
 					axisList[0] = Math.radians(axisList[0]);
 					axisList[1] = Math.radians(axisList[1]);
