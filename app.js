@@ -1,5 +1,18 @@
+const agm = require('./agm.js');
 const utils = require('./utils.js');
 const fs = require('fs');
+
+sensors = new agm.AGM(2000,0,8,0);
+
+//sensors.calibrateSens(1000);
+
+setInterval(function () {
+	axis = sensors.readGData('deg');
+	console.log(axis[0] + ',' + axis[1] + ',' + axis[2]);
+},200);
+	
+
+
 
 //setInterval(readMotionSensors, 150);
 
