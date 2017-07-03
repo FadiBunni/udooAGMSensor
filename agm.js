@@ -420,7 +420,103 @@ function AGM(gScaleRange,fsDouble,aScaleRange,noise){
 
 	// complementary filter algorithm
 	this.comFilter = function(DT,axisOffset){
+		var exTime = 0.013 // execution time
+		if(DT < exTime){
+			console.log("Error: DT is too small to sample the accelerometer and gyroscope data. DT must be greater than 0.013");
+			process.exit(1);
+		}else{
+			if(calibrated == true){
+				var x,y,z,x2.y2.z2;
+				var accXangle, accYangle,accZangle,gyrXangle,gyrYangle,gyrZangle;
+				var highPass = DT / (DT + exTime);
+				var rate_gyr = [];
+				var acc_angle = [];
 
+				var cFAngleAxis = [];
+
+				rate_gyr = this.readGData();
+				acc_angle = this.readAData();
+
+				var factor = accScale / 2;
+
+				var gFactor = (gyrScale / (1000*32)) * gyrDouble;
+
+				if(acc_angle[0] >= 32768)
+					acc_angle[0] -= 65536;
+				if(acc_angle[1] >= 32768)
+					acc_angle[1] -= 65536;
+				if(acc_angle[2] >= 32768)
+					acc_angle[2] -= 65536;
+
+				if(rate_gyr[0] >= 32768)
+					rate_gyr[0] -= 65536;
+				if(rate_gyr[1] >= 32768)
+					rate_gyr[1] -= 65536;
+				if(rate_gyr[2] >= 32768)
+					rate_gyr[2] -= 65536;
+
+				x = (((acc_angle[0] - axisOffset[0]) / 4) * 0.244 * factor);
+				y = (((acc_angle[1] - axisOffset[1]) / 4) * 0.244 * factor);
+				z = (((acc_angle[2] - axisOffset[2]) / 4) * 0.244 * factor);
+
+				x2 = x * x;
+				y2 = y * y;
+				z2 = z * z;
+
+				accXangle = Math.atan(x / Math.sqrt(y2 + z2)) * (180 / Math.PI);
+				accYangle = Math.atan(y / Math.sqrt(x2 + z2)) * (180 / Math.PI);
+				accZangle = Math.atan(z / Math.sqrt(x2 + y2)) * (180 / Math.PI);
+
+				gyrXangle = ((rate_gyr[0] - axisOffset[3]) * gFactor) / DT;
+				gyrYangle = ((rate_gyr[1] - axisOffset[4]) * gFactor) / DT;
+				gyrZangle = ((rate_gyr[2] - axisOffset[5]) * gFactor) / DT;
+
+				var modGyr = (gyrXangle * gyrXangle) + (gyrYangle * gyrYangle) + (gyrZangle * gyrZangle);
+
+				// Only for the first time we get the position or if the base doesn't move
+				// if self.compAux == 0 || (math.fabs(gyrXangle) <= 5 && math.fabs(gyrYangle) <= 5 && math.fabs(gyrZangle) <= 5)
+				if(compAux == 0){
+					cFAngleX = accXangle;
+					cFAngleY = accYangle;
+					cFAngleZ = accZangle;
+					compAux = 1;
+				}else{		// Then we use the Complementary Filter
+					cFAngleX = (highPass) * (cFAngleX + gyrXangle * DT) + (1 - highPass) * (accXangle);
+					cFAngleY = (highPass) * (cFAngleY + gyrYangle * DT) + (1 - highPass) * (accYangle);
+					cFAngleZ = (highPass) * (cFAngleZ + gyrZangle * DT) + (1 - highPass) * (accZangle);
+				}
+
+				cFAngleAxis.push(cFAngleX);
+				cFAngleAxis.push(cFAngleY*(-1));
+				cFAngleAxis.push(cFAngleZ*(-1));
+
+				gyrXangle = (rate_gyr[0] - axisOffset[3]) * gFactor;
+				gyrYangle = (rate_gyr[1] - axisOffset[4]) * gFactor;
+				gyrZangle = (rate_gyr[2] - axisOffset[5]) * gFactor;
+
+				// if(compAux == 0){	// Only for the first time we get the position
+				// 	cFAnglex = accXangle;
+				// 	cFAngleY = accYangle;
+				// 	cFAngleZ = accZangle;
+				// 	compAux = 1;
+				// }else{		// Then we use the Complementary Filter
+				// 	 cFAngleX = (highPass) * (cFAngleX + gyrXangle * DT) + (1 - highPass) * (accXangle);
+				// 	cFAngleY = (highPass) * (cFAngleY + gyrYangle * DT) + (1 - highPass) * (accYangle);
+				// 	cFAngleZ = (highPass) * (cFAngleZ + gyrZangle * DT) + (1 - highPass) * (accZangle);
+				// }
+
+				// cFAngleAxis.push(cFAngleX);
+				// cFAngleAxis.push(cFAngleY*(-1));
+				// cFAngleAxis.push(cFAngleZ*(-1));
+
+				sleep(DT-exTime);
+
+				return cFAngleAxis;
+			}else{
+				console.log("Error: failed calibration. Make sure to calibate the sensors using calibrate(sensor,samples)");
+				process.exit(1);
+			}
+		}
 	};
 
 	this.kalmanFilter = function(DT,axis,axisOffset){
@@ -434,6 +530,8 @@ function AGM(gScaleRange,fsDouble,aScaleRange,noise){
 	this.getCurrentConf = function(sensor,screen){
 
 	};
+
+	// run init after all the need methods has been loaded
 	this.init(gScaleRange,fsDouble,aScaleRange,noise);
 };
 
