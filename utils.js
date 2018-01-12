@@ -167,7 +167,6 @@ const utils = {
 			process.exit(1);
 		}
 	},
-
 };
 
 module.exports = utils;
